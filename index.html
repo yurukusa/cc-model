@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>cc-model — Claude model distribution</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0d1117;
+    color: #c9d1d9;
+    font-family: 'SF Mono', 'Consolas', 'Cascadia Code', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px;
+  }
+  h1 { font-size: 1.5rem; color: #d2a8ff; margin-bottom: 6px; letter-spacing: -0.5px; }
+  .subtitle { color: #8b949e; font-size: 0.875rem; margin-bottom: 32px; }
+
+  .drop-zone {
+    border: 2px dashed #30363d;
+    border-radius: 12px;
+    padding: 48px 64px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    max-width: 480px;
+    width: 100%;
+    margin-bottom: 32px;
+  }
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: #d2a8ff;
+    background: rgba(210,168,255,0.05);
+  }
+  .drop-icon { font-size: 2.5rem; margin-bottom: 12px; }
+  .drop-text { color: #8b949e; font-size: 0.875rem; line-height: 1.6; }
+  .drop-text strong { color: #c9d1d9; }
+  #file-input { display: none; }
+
+  .result { display: none; max-width: 600px; width: 100%; }
+  .result.visible { display: block; }
+
+  .card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .card-title {
+    color: #8b949e;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 16px;
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .stat-item { text-align: center; }
+  .stat-val { font-size: 1.3rem; color: #d2a8ff; font-weight: 700; }
+  .stat-lbl { font-size: 0.7rem; color: #8b949e; margin-top: 2px; }
+
+  /* Model tier colors */
+  .opus  { background: linear-gradient(90deg, #d2a8ff 0%, #a56bff 100%); }
+  .sonnet { background: linear-gradient(90deg, #79c0ff 0%, #388bfd 100%); }
+  .haiku  { background: linear-gradient(90deg, #56d364 0%, #2ea043 100%); }
+
+  .bar-chart { font-size: 0.8rem; }
+  .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .bar-label { width: 88px; text-align: right; color: #c9d1d9; flex-shrink: 0; font-size: 0.8rem; }
+  .bar-track { flex: 1; height: 16px; background: #21262d; border-radius: 3px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
+  .bar-count { width: 72px; color: #8b949e; text-align: right; flex-shrink: 0; font-size: 0.75rem; }
+
+  /* Timeline */
+  .timeline { font-size: 0.78rem; }
+  .tl-row { display: flex; gap: 12px; margin-bottom: 4px; align-items: flex-start; }
+  .tl-week { width: 64px; color: #8b949e; flex-shrink: 0; }
+  .tl-bars { flex: 1; display: flex; gap: 4px; flex-wrap: wrap; }
+  .tl-chip {
+    padding: 2px 7px;
+    border-radius: 3px;
+    font-size: 0.72rem;
+    color: #0d1117;
+    font-weight: 600;
+  }
+
+  .tab-row { display: flex; gap: 8px; margin-bottom: 16px; }
+  .tab-btn {
+    background: none;
+    border: 1px solid #30363d;
+    color: #8b949e;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.8rem;
+    transition: all 0.2s;
+  }
+  .tab-btn.active { border-color: #d2a8ff; color: #d2a8ff; background: rgba(210,168,255,0.1); }
+  .tab-btn:hover:not(.active) { border-color: #8b949e; color: #c9d1d9; }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  .reset-btn {
+    margin-top: 16px;
+    background: none;
+    border: 1px solid #30363d;
+    color: #8b949e;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.8rem;
+    display: block;
+    width: 100%;
+    transition: all 0.2s;
+  }
+  .reset-btn:hover { border-color: #d2a8ff; color: #d2a8ff; }
+
+  .footer { color: #8b949e; font-size: 0.75rem; text-align: center; margin-top: 12px; }
+  .footer a { color: #d2a8ff; text-decoration: none; }
+  .footer a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<h1>🤖 cc-model</h1>
+<p class="subtitle">Which Claude AI models power your sessions?</p>
+
+<div class="drop-zone" id="drop-zone">
+  <div class="drop-icon">📁</div>
+  <div class="drop-text">
+    <strong>Drop your ~/.claude folder here</strong><br>
+    or click to select<br><br>
+    Reads session files locally.<br>
+    Nothing is uploaded.
+  </div>
+  <input type="file" id="file-input" webkitdirectory multiple accept=".jsonl">
+</div>
+
+<div class="result" id="result">
+  <div class="card">
+    <div class="card-title">Model Summary</div>
+    <div class="stats-grid">
+      <div class="stat-item">
+        <div class="stat-val" id="stat-total">—</div>
+        <div class="stat-lbl">sessions</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-val" id="stat-current">—</div>
+        <div class="stat-lbl">current model</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-val" id="stat-primary">—</div>
+        <div class="stat-lbl">primary model</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="tab-row">
+      <button class="tab-btn active" data-tab="dist">Distribution</button>
+      <button class="tab-btn" data-tab="timeline">Timeline</button>
+    </div>
+
+    <div class="tab-panel active" id="tab-dist">
+      <div class="bar-chart" id="bar-chart"></div>
+    </div>
+    <div class="tab-panel" id="tab-timeline">
+      <div class="timeline" id="timeline-chart"></div>
+    </div>
+  </div>
+
+  <button class="reset-btn" id="reset-btn">← Analyze another folder</button>
+</div>
+
+<div class="footer">
+  <a href="https://github.com/yurukusa/cc-model" target="_blank">cc-model</a> ·
+  Part of <a href="https://yurukusa.github.io/cc-toolkit/" target="_blank">cc-toolkit</a> · 50 free tools for Claude Code
+</div>
+
+<script>
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+const resultEl = document.getElementById('result');
+const resetBtn = document.getElementById('reset-btn');
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); processFiles(e.dataTransfer.files); });
+fileInput.addEventListener('change', () => processFiles(fileInput.files));
+resetBtn.addEventListener('click', () => { resultEl.classList.remove('visible'); dropZone.style.display = ''; fileInput.value = ''; });
+
+// Tab switching
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+function normalizeModel(raw) {
+  const base = raw.replace(/-20\d{6}$/, '');
+  const parts = base.replace(/^claude-/, '').split('-');
+  if (parts.length >= 3) {
+    const tier = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+    return `${tier} ${parts[1]}.${parts[2]}`;
+  }
+  return base;
+}
+
+function getModelClass(model) {
+  if (model.startsWith('Opus')) return 'opus';
+  if (model.startsWith('Sonnet')) return 'sonnet';
+  if (model.startsWith('Haiku')) return 'haiku';
+  return 'opus';
+}
+
+function getISOWeek(date) {
+  const d = new Date(date);
+  d.setHours(0,0,0,0);
+  d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
+  const week1 = new Date(d.getFullYear(), 0, 4);
+  const wn = 1 + Math.round(((d - week1)/86400000 - 3 + ((week1.getDay()+6)%7))/7);
+  return `${d.getFullYear()}-W${String(wn).padStart(2,'0')}`;
+}
+
+async function processFiles(files) {
+  const jsonlFiles = Array.from(files).filter(f => {
+    const p = f.webkitRelativePath || f.name;
+    return p.endsWith('.jsonl') && !p.includes('/subagents/');
+  });
+  if (jsonlFiles.length === 0) { alert('No session files found.'); return; }
+  dropZone.style.display = 'none';
+
+  const sessions = [];
+  const BATCH = 40;
+  for (let i = 0; i < jsonlFiles.length; i += BATCH) {
+    const batch = jsonlFiles.slice(i, i + BATCH);
+    await Promise.all(batch.map(async f => {
+      try {
+        const text = await f.text();
+        const matches = text.match(/"model":"claude-[^"]+"/g);
+        if (!matches) return;
+        const mc = {};
+        for (const m of matches) {
+          const nm = normalizeModel(m.replace('"model":"','').replace('"',''));
+          mc[nm] = (mc[nm]||0) + 1;
+        }
+        const primary = Object.entries(mc).sort((a,b)=>b[1]-a[1])[0][0];
+        const tsMatch = text.match(/"timestamp":"([^"]+)"/);
+        sessions.push({ model: primary, date: tsMatch ? new Date(tsMatch[1]) : null });
+      } catch {}
+    }));
+  }
+
+  if (!sessions.length) { alert('No model data found.'); return; }
+
+  const modelTotals = {};
+  for (const s of sessions) modelTotals[s.model] = (modelTotals[s.model]||0) + 1;
+  const sorted = Object.entries(modelTotals).sort((a,b)=>b[1]-a[1]);
+  const total = sessions.length;
+  const recent = sessions.filter(s=>s.date).sort((a,b)=>b.date-a.date)[0];
+  const current = recent ? recent.model : sorted[0][0];
+
+  document.getElementById('stat-total').textContent = total;
+  document.getElementById('stat-current').textContent = current;
+  document.getElementById('stat-primary').textContent = sorted[0][0];
+
+  const maxCount = sorted[0][1];
+  document.getElementById('bar-chart').innerHTML = sorted.map(([m, c]) => `
+    <div class="bar-row">
+      <div class="bar-label">${m}</div>
+      <div class="bar-track">
+        <div class="bar-fill ${getModelClass(m)}" style="width:${(c/maxCount*100).toFixed(1)}%"></div>
+      </div>
+      <div class="bar-count">${c} (${Math.round(c/total*100)}%)</div>
+    </div>
+  `).join('');
+
+  // Timeline
+  const weekData = {};
+  for (const s of sessions) {
+    if (!s.date) continue;
+    const wk = getISOWeek(s.date);
+    if (!weekData[wk]) weekData[wk] = {};
+    weekData[wk][s.model] = (weekData[wk][s.model]||0) + 1;
+  }
+  const weeks = Object.keys(weekData).sort().slice(-12);
+  document.getElementById('timeline-chart').innerHTML = weeks.map(wk => {
+    const data = weekData[wk];
+    const chips = Object.entries(data).sort((a,b)=>b[1]-a[1]).map(([m,c]) =>
+      `<span class="tl-chip ${getModelClass(m)}">${m} ×${c}</span>`
+    ).join('');
+    return `<div class="tl-row"><div class="tl-week">${wk}</div><div class="tl-bars">${chips}</div></div>`;
+  }).join('');
+
+  resultEl.classList.add('visible');
+}
+</script>
+</body>
+</html>
